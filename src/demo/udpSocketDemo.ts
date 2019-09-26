@@ -9,11 +9,14 @@ server.onReady = (socket) => {
   socket.setBroadcast(true);
   console.log('Server', socket.address());
 
-  server.bcast('Hello from Server');
+  server.broadcast('Hello from Server');
 }
 
 let start = 0;
-server.listen();
+server.onInit = (payload) => {
+  return [payload, 'from-server'];
+}
+
 server.onConnection = (socket, payload) => {
   console.log('New connection', socket.remote(), payload);
   socket.onMessage = (msg) => {
@@ -43,24 +46,26 @@ server.onConnection = (socket, payload) => {
   // return version - 1;
 }
 
+server.listen();
+
 const client = new UDPSocket(dgram.createSocket('udp4'))
 client.onReady = (socket) => {
   console.log('Client', socket.address());
   socket.setBroadcast(true);
 
-  client.bcast('Hello from Client');
+  client.broadcast('Hello from Client');
 }
 
-server.onBroadCast = (msg) => {
-  console.log('Server bcast rx', msg);
+server.onBroadCast = (msg, rinfo) => {
+  console.log('Server bcast rx', msg, rinfo);
 }
 
-client.onBroadCast = (msg) => {
-  console.log('Client bcast rx', msg);
+client.onBroadCast = (msg, rinfo) => {
+  console.log('Client bcast rx', msg, rinfo);
 };
 
-client.onConnect = (serverAddress, latency) => {
-  console.log(`Connected with ${serverAddress.address} with latency ${latency}`);
+client.onConnect = (payload) => {
+  console.log(`Connected with shift ${client.getTimeShift()}`, payload);
   client.send('A Long Message'.repeat(200));
 };
 
@@ -75,9 +80,8 @@ client.onMessage = (msg: string) => {
   total += msg.length;
   interval = Date.now() - start;
   speed = ((total * 1000) / interval) / 1024 / 1024;
-  // console.log(Date.now(), 'Message', msg.length);
+  console.log(Date.now(), 'Message', msg);
 }
-
 
 setTimeout(() => {
   client.connect({ address: 'localhost', port: serverPort }, {

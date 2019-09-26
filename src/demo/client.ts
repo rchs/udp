@@ -13,8 +13,8 @@ if (!SERVER || !SERVER_PORT) {
     client.connect({ address: SERVER, port: SERVER_PORT }, 'Demo Client');
   }
 
-  client.onConnect = (address, timeshift) => {
-    console.log(`Connected with server with timeshift ${timeshift}`);
+  client.onConnect = (payload) => {
+    console.log(`Connected with server with timeshift ${client.getTimeShift()} - payload`, payload);
     client.send('Hello');
   }
 
