@@ -1,21 +1,27 @@
 {
   "name": "@rchs/udp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "UDPSocket",
   "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "jest",
     "demo": "ts-node-dev --respawn --watch ./src --transpileOnly ./src/demo/udpSocketDemo.ts",
     "clean": "rimraf dist && rimraf es6",
-    "build": "tsc -p tsconfig.cjs.json",
-    "publish": "yarn clean && yarn build"
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "yarn clean && yarn build"
   },
   "dependencies": {
-    "@types/node": "^12.7.7"
+    "@types/node": "^12.7.7",
+    "utf8": "^3.0.0"
+  },
+  "repository": "git://github.com/rchs/udp.git",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "author": "Ranjan Shrestha",
   "license": "UNLICENSED",
-  "devDependencies": {
-
-  }
+  "devDependencies": {}
 }
