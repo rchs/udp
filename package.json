@@ -1,0 +1,21 @@
+{
+  "name": "@rchs/udp",
+  "version": "1.0.0",
+  "description": "UDPSocket",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "jest",
+    "demo": "ts-node-dev --respawn --watch ./src --transpileOnly ./src/demo/udpSocketDemo.ts",
+    "clean": "rimraf dist && rimraf es6",
+    "build": "tsc -p tsconfig.cjs.json",
+    "publish": "yarn clean && yarn build"
+  },
+  "dependencies": {
+    "@types/node": "^12.7.7"
+  },
+  "author": "Ranjan Shrestha",
+  "license": "UNLICENSED",
+  "devDependencies": {
+
+  }
+}
