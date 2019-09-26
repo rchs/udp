@@ -69,6 +69,7 @@ export class UDPSocket {
   private txPending: [number, number, Uint8Array];
   private txQueue: Array<[number, number, Uint8Array]>;
   private rxBuffer: Uint8Array;
+  private timeShift: number;
 
   constructor(socket: Socket, port?: number) {
     this.socket = socket;
@@ -86,6 +87,10 @@ export class UDPSocket {
         }
       });
     }
+  }
+
+  getTimeShift(): number {
+    return this.timeShift;
   }
 
   remote(): AddressInfo {
@@ -145,20 +150,21 @@ export class UDPSocket {
         }
         const payload = this._parseConnect(data);
         const sock = new UDPSocket(this.socket, null);
+        sock.timeShift = Date.now() - payload[1];
         sock.init(rinfo, SERVER_SIDE_RETRIES, payload[0]);
         sock.onTerminate = () => {
           delete this.clients[remoteId];
         }
         const publicKey = powmod(DIFFE_BASE, this.privateKey, DIFFE_MODULO);
-        const buf = this._prepareConnect([publicKey, payload[1]]);
+        const buf = this._prepareConnect([publicKey, Date.now()]);
         sock._send(buf, 0, buf.length, rinfo.port, rinfo.address);
         this.clients[remoteId] = sock;
         this.onConnection(sock, payload[2]);
       } else if (this.mode === MODE_CLIENT) {
         const payload = this._parseConnect(data);
         this.init(rinfo, CLIENT_SIDE_RETRIES, payload[0]);
-        const latency = Date.now() - payload[1];
-        if (this.onConnect) this.onConnect(rinfo, latency);
+        this.timeShift = Date.now() - payload[1];
+        if (this.onConnect) this.onConnect(rinfo, this.timeShift);
       }
     } else if (type === DATA) {
       if (this.mode === MODE_CLIENT) {
