@@ -13,15 +13,13 @@
     "build": "tsc -p tsconfig.json",
     "prepublishOnly": "yarn clean && yarn build"
   },
-  "dependencies": {
-    "@types/node": "^12.7.7",
-    "utf8": "^3.0.0"
-  },
   "repository": "git://github.com/rchs/udp.git",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },
   "author": "Ranjan Shrestha",
   "license": "UNLICENSED",
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node": "^12.7.7"
+  }
 }

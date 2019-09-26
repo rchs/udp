@@ -1,11 +1,13 @@
 import { Socket, RemoteInfo } from 'dgram';
-import { decode, encode } from './TextEncoder';
+import { strToUint8, uint8ToStr } from './strToUint8';
 import powmod from './powmod'
 
 type AddressInfo = {
   address: string,
   port: number,
 }
+
+const HEADER = strToUint8('["",');
 
 const CONNECT = 1;
 const BCAST = 0;
@@ -287,12 +289,8 @@ export class UDPSocket {
   }
 
   private _parseData(buf: Uint8Array): any {
-    const header = '["",';
-    buf[0] = header.charCodeAt(0);
-    buf[1] = header.charCodeAt(1);
-    buf[2] = header.charCodeAt(2);
-    buf[3] = header.charCodeAt(3);
-    const msg = JSON.parse(decode(buf));
+    buf.set(HEADER);
+    const msg = JSON.parse(uint8ToStr(buf));
     return msg[1];
   }
 
@@ -300,7 +298,7 @@ export class UDPSocket {
     if (this.mode !== MODE_CLIENT) throw new Error('Socket is not a client and cannot send messages');
     // Create chunks and queue them
     // Add extra space for headers `["",` 4 bytes
-    const msg = encode(JSON.stringify(["", payload]));
+    const msg = strToUint8(JSON.stringify(["", payload]));
     const trySend = this.txQueue.length === 0 && !this.txPending;
 
     // Divide it into chunks of little less than 1000 bytes
@@ -360,28 +358,28 @@ export class UDPSocket {
 
   private _prepareConnect(payload: ConnectionPayload) {
     const msg = JSON.stringify(payload);
-    const buf = encode(msg);
+    const buf = strToUint8(msg);
     // Replace the starting '[' with the connect code
     buf[0] = CONNECT;
     return buf;
   }
 
   private _parseConnect(buf: Uint8Array): ConnectionPayload {
-    buf[0] = '['.charCodeAt(0);
-    return JSON.parse(decode(buf));
+    buf[0] = HEADER[0];
+    return JSON.parse(uint8ToStr(buf));
   }
 
   private _prepareBcast(payload: any) {
-    const msg = JSON.stringify(payload);
-    const buf = encode(` ${msg}`);
+    const msg = JSON.stringify([payload]);
+    const buf = strToUint8(msg);
     // Replace the starting space with bcast code
     buf[0] = BCAST;
     return buf;
   }
 
   private _parseBcast(buf: Uint8Array) {
-    buf[0] = 32;
-    return JSON.parse(decode(buf));
+    buf[0] = HEADER[0];
+    return JSON.parse(uint8ToStr(buf));
   }
 
   private _send(buf: Uint8Array, offset: number, length: number, port: number, ip: string = '255.255.255.255') {
