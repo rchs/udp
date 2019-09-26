@@ -1,9 +1,9 @@
 import dgram = require('dgram');
-import { UdpSocket } from '../';
+import { UDPSocket } from '../';
 
 const socket = dgram.createSocket('udp4');
 const serverPort = 17812;
-const server = new UdpSocket(socket, serverPort);
+const server = new UDPSocket(socket, serverPort);
 
 server.onReady = (socket) => {
   socket.setBroadcast(true);
@@ -43,7 +43,7 @@ server.onConnection = (socket, payload) => {
   // return version - 1;
 }
 
-const client = new UdpSocket(dgram.createSocket('udp4'))
+const client = new UDPSocket(dgram.createSocket('udp4'))
 client.onReady = (socket) => {
   console.log('Client', socket.address());
   socket.setBroadcast(true);

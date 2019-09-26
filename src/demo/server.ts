@@ -1,11 +1,11 @@
 import dgram = require('dgram');
-import { UdpSocket } from '../';
+import { UDPSocket } from '../';
 
 const port = parseInt(process.argv[2]) || 0;
-const server = new UdpSocket(dgram.createSocket('udp4'), port);
+const server = new UDPSocket(dgram.createSocket('udp4'), port);
 
 server.onConnection = (socket, connInfo) => {
-  console.log('New connection', socket.remote(), connInfo);
+  console.log(`New connection: TimeShift ${socket.getTimeShift()}`, socket.remote(), connInfo);
   socket.onMessage = (msg) => {
     console.log('Rx', msg);
     socket.send(msg);
