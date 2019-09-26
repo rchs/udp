@@ -46,7 +46,7 @@ export class UDPSocket {
 
   onError: (err: Error) => void;
   onReady: (socket: Socket) => void;
-  onBroadCast: (msg: any) => void;
+  onBroadCast: (msg: any, rInfo: AddressInfo) => void;
   // Return the version number
   onConnection: (socket: UDPSocket, payload: any) => void;
   onConnect: (address: AddressInfo, latency: number) => void;
@@ -139,7 +139,7 @@ export class UDPSocket {
     const remoteId = `${rinfo.address}:${rinfo.port}`;
     if (type === BCAST) {
       if (this.onBroadCast) {
-        this.onBroadCast(this._parseBcast(data));
+        this.onBroadCast(this._parseBcast(data), rinfo);
       }
     } else if (type === CONNECT) {
       // Only allowed in Server mode
@@ -234,11 +234,10 @@ export class UDPSocket {
     this._send(buf, 0, buf.length, address.port, address.address);
   }
 
-  bcast(msg: any) {
+  broadcast(msg: any, address?: string) {
     const buf = this._prepareBcast(msg);
-    this._send(buf, 0, buf.length, this.port);
+    this._send(buf, 0, buf.length, this.port, address);
   }
-
 
   private handleData(data: Uint8Array) {
     const remoteSeq = data[1];
@@ -379,7 +378,7 @@ export class UDPSocket {
     return JSON.parse(decode(buf));
   }
 
-  private _send(buf: Uint8Array, offset: number, length: number, port: number, ip?: string) {
+  private _send(buf: Uint8Array, offset: number, length: number, port: number, ip: string = '255.255.255.255') {
     // xor with the shared key
     // this._parse(buf);
     this.socket.send(buf, offset, length, port, ip);
