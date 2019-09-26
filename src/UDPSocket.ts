@@ -48,8 +48,9 @@ export class UDPSocket {
   onReady: (socket: Socket) => void;
   onBroadCast: (msg: any, rInfo: AddressInfo) => void;
   // Return the version number
-  onConnection: (socket: UDPSocket, payload: any) => void;
-  onConnect: (address: AddressInfo, latency: number) => void;
+  onInit: (payload: any) => any;
+  onConnection: (socket: UDPSocket, payload: any, initPayload: any) => void;
+  onConnect: (initPayload: any) => void;
   onMessage: (msg: any) => void;
   onClose: () => void;
 
@@ -144,11 +145,14 @@ export class UDPSocket {
     } else if (type === CONNECT) {
       // Only allowed in Server mode
       if (this.mode === MODE_SERVER) {
+        const payload = this._parseConnect(data);
+        const initPayload = this.onInit ? this.onInit(payload[2]) : null;
+
         // close existing connection if any
         if (this.clients[remoteId]) {
           this.clients[remoteId].close();
         }
-        const payload = this._parseConnect(data);
+
         const sock = new UDPSocket(this.socket, null);
         sock.timeShift = Date.now() - payload[1];
         sock.init(rinfo, SERVER_SIDE_RETRIES, payload[0]);
@@ -159,12 +163,12 @@ export class UDPSocket {
         const buf = this._prepareConnect([publicKey, Date.now()]);
         sock._send(buf, 0, buf.length, rinfo.port, rinfo.address);
         this.clients[remoteId] = sock;
-        this.onConnection(sock, payload[2]);
+        this.onConnection(sock, payload[2], initPayload);
       } else if (this.mode === MODE_CLIENT) {
         const payload = this._parseConnect(data);
         this.init(rinfo, CLIENT_SIDE_RETRIES, payload[0]);
         this.timeShift = Date.now() - payload[1];
-        if (this.onConnect) this.onConnect(rinfo, this.timeShift);
+        if (this.onConnect) this.onConnect(payload[2]);
       }
     } else if (type === DATA) {
       if (this.mode === MODE_CLIENT) {
@@ -208,6 +212,8 @@ export class UDPSocket {
     // Use this method to forward socket from one UDPSocket shell to another
     if (this.mode !== MODE_NONE) throw new Error('Can only clone an uninitialized socket. Client/Server sockets cannot be cloned');
     const clone = new UDPSocket(this.socket, null);
+    clone.port = this.port;
+
     // @ts-ignore
     this.socket = null;
     return clone;
