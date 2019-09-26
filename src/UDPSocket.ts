@@ -39,7 +39,7 @@ type ConnectionPayload = [
   any?
 ];
 
-export class UdpSocket {
+export class UDPSocket {
   private socket: Socket;
   private port: number;
 
@@ -47,7 +47,7 @@ export class UdpSocket {
   onReady: (socket: Socket) => void;
   onBroadCast: (msg: any) => void;
   // Return the version number
-  onConnection: (socket: UdpSocket, payload: any) => void;
+  onConnection: (socket: UDPSocket, payload: any) => void;
   onConnect: (address: AddressInfo, latency: number) => void;
   onMessage: (msg: any) => void;
   onClose: () => void;
@@ -61,7 +61,7 @@ export class UdpSocket {
   private retries: number;
   private privateKey: number;
   private sharedKey: number;
-  private clients: {[address:string]: UdpSocket};
+  private clients: {[address:string]: UDPSocket};
 
   private _try: number;
   private _txTimer: ReturnType<typeof setTimeout>;
@@ -143,7 +143,7 @@ export class UdpSocket {
           this.clients[remoteId].close();
         }
         const payload = this._parseConnect(data);
-        const sock = new UdpSocket(this.socket, null);
+        const sock = new UDPSocket(this.socket, null);
         sock.init(rinfo, SERVER_SIDE_RETRIES, payload[0]);
         sock.onTerminate = () => {
           delete this.clients[remoteId];
@@ -200,7 +200,7 @@ export class UdpSocket {
   clone() {
     // Use this method to forward socket from one UDPSocket shell to another
     if (this.mode !== MODE_NONE) throw new Error('Can only clone an uninitialized socket. Client/Server sockets cannot be cloned');
-    const clone = new UdpSocket(this.socket, null);
+    const clone = new UDPSocket(this.socket, null);
     // @ts-ignore
     this.socket = null;
     return clone;
