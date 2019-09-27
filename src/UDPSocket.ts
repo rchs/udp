@@ -379,7 +379,7 @@ export class UDPSocket {
 
   private _parseBcast(buf: Uint8Array) {
     buf[0] = HEADER[0];
-    return JSON.parse(uint8ToStr(buf));
+    return JSON.parse(uint8ToStr(buf))[0];
   }
 
   private _send(buf: Uint8Array, offset: number, length: number, port: number, ip: string = '255.255.255.255') {
