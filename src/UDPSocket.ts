@@ -213,10 +213,10 @@ export class UDPSocket {
   clone() {
     // Use this method to forward socket from one UDPSocket shell to another
     if (this.mode !== MODE_NONE) throw new Error('Can only clone an uninitialized socket. Client/Server sockets cannot be cloned');
+    this.socket.removeListener('message', this.handleMessage);
     const clone = new UDPSocket(this.socket, null);
     clone.port = this.port;
-
-    // @ts-ignore
+    clone.socket.on('message', clone.handleMessage);
     this.socket = null;
     return clone;
   }
