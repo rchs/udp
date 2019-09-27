@@ -56,11 +56,11 @@ client.onReady = (socket) => {
   client.broadcast('Hello from Client');
 }
 
-server.onBroadCast = (msg, rinfo) => {
+server.onBroadcast = (msg, rinfo) => {
   console.log('Server bcast rx', msg, rinfo);
 }
 
-client.onBroadCast = (msg, rinfo) => {
+client.onBroadcast = (msg, rinfo) => {
   console.log('Client bcast rx', msg, rinfo);
 };
 
