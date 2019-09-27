@@ -48,7 +48,7 @@ export class UDPSocket {
 
   onError: (err: Error) => void;
   onReady: (socket: Socket) => void;
-  onBroadCast: (msg: any, rInfo: AddressInfo) => void;
+  onBroadcast: (msg: any, rInfo: AddressInfo) => void;
   // Return the version number
   onInit: (payload: any) => any;
   onConnection: (socket: UDPSocket, payload: any, initPayload: any) => void;
@@ -141,8 +141,8 @@ export class UDPSocket {
     const type = data[0];
     const remoteId = `${rinfo.address}:${rinfo.port}`;
     if (type === BCAST) {
-      if (this.onBroadCast) {
-        this.onBroadCast(this._parseBcast(data), rinfo);
+      if (this.onBroadcast) {
+        this.onBroadcast(this._parseBcast(data), rinfo);
       }
     } else if (type === CONNECT) {
       // Only allowed in Server mode
