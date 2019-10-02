@@ -59,8 +59,17 @@ export class TxQueue {
     return this.queue.shift()[0];
   }
 
+  isEmpty() {
+    return this.queue.length === 0;
+  }
+
   peek() {
-    return this.queue[0];
+    const v = this.queue[0];
+    if (v[5] === true) {
+      this.tries = 0;
+      this.queue.shift();
+    }
+    return v;
   }
 
   add(type: number, data: any) {

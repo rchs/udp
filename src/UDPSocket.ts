@@ -139,6 +139,14 @@ export class UDPSocket {
     return null;
   }
 
+  private _handleSend = () => {
+    if (this.state & STATE_CLOSING) {
+      if (this.tx.isEmpty()) {
+        this._terminate(CODE_NORMAL);
+      }
+    }
+  }
+
   private _handleMessage = (data: Uint8Array, rInfo: RemoteInfo) => {
     const type = data[0];
     const version = data[1];
@@ -306,6 +314,6 @@ export class UDPSocket {
     buf[3] = this.ack;
     buf[4] = chunk;
 
-    this.socket.send(buf, offset, length, port, ip);
+    this.socket.send(buf, offset, length, port, ip, this._handleSend);
   }
 }
