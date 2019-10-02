@@ -2,7 +2,7 @@ import { strToUint8, uint8ToStr } from './strToUint8';
 
 // Maximum chunksize (limited by android devices)
 const CHUNK_SIZE = 980;
-const HEADER_SPACE = ' '.repeat(9); // Total Header would be SPACE + 4 bytes
+const HEADER_SPACE = ' '.repeat(10); // Total Header would be SPACE + 4 bytes
 export function createPayload(data: any) {
   return strToUint8(JSON.stringify([HEADER_SPACE, data]));
 }

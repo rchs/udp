@@ -39,9 +39,17 @@ const MSG_CLOSE = MSG_DATA | 0x04;
 
 const CODE_NO_RESPONSE = 1;
 const CODE_NORMAL = 0;
+const SOF = 0x55;
 
 function incr(num: number) {
   return (num + 1) % 256;
+}
+
+function validate(buffer: Uint8Array) {
+  // Minimum buffer size requirement
+  if (buffer.length < 15) return false;
+  if (buffer[0] !== SOF) return false;
+  return true;
 }
 
 export class UDPSocket {
@@ -169,55 +177,63 @@ export class UDPSocket {
       console.log(`Rx ${rInfo.address}:${rInfo.port}: type=${data[0]}:${typeStr}, version=${data[1]}, seq=${data[2]}, ack=${data[3]}, chunk=${data[4]}, Len=${data.length}`)
     }
 
-    const type = data[0];
-    const version = data[1];
-    const seq = data[2];
-    const shift = Date.now() - binToDate(data, 5);
+    if (!validate(data)) return;
 
-    // Handle broadcast separately
-    if (type === MSG_BCAST) {
-      // Replace with the valid json characters
-      if (this.onBroadcast) this.onBroadcast(parsePayload(data), rInfo, version);
-      return;
-    }
+    const type = data[1];
+    const version = data[2];
+    const seq = data[3];
+    const shift = Date.now() - binToDate(data, 6);
 
-    if (this.state & STATE_LISTENING) {
-      const remoteId = `${rInfo.address}:${rInfo.port}`;
-      const client = this.clients[remoteId];
-      if (client) {
-        client.updateTimeShift(shift);
-        client._processData(data, rInfo);
-      } else if (type === MSG_CONNECT) {
-        const payload = parsePayload(data);
-        const connPayload = this.onInit ? this.onInit(payload) : null;
-        const newClient = new UDPSocket(this.socket, null);
-        this.clients[remoteId] = newClient;
-        newClient._init(rInfo, version);
-        newClient.updateTimeShift(shift);
-        newClient.state |= STATE_CONNECTED;
-        newClient.ack = seq;
-        newClient._onTerminate = (code: number) => {
-          delete this.clients[remoteId];
-          newClient.socket = null;
-          // In case the server has initiated a close
-          if (this.state & STATE_CLOSING) {
-            if (Object.keys(this.clients).length === 0) {
-              this.state = STATE_NONE;
-              this.socket.close();
-              this.socket = null;
-              if (this.onClose) this.onClose(CODE_NORMAL);
+    try {
+      // Handle broadcast separately
+      if (type === MSG_BCAST) {
+        // Replace with the valid json characters
+        if (this.onBroadcast) this.onBroadcast(parsePayload(data), rInfo, version);
+        return;
+      }
+
+      if (this.state & STATE_LISTENING) {
+        const remoteId = `${rInfo.address}:${rInfo.port}`;
+        const client = this.clients[remoteId];
+        if (client) {
+          client.updateTimeShift(shift);
+          client._processData(data, rInfo);
+        } else if (type === MSG_CONNECT) {
+          const payload = parsePayload(data);
+          const connPayload = this.onInit ? this.onInit(payload) : null;
+          const newClient = new UDPSocket(this.socket, null);
+          this.clients[remoteId] = newClient;
+          newClient._init(rInfo, version);
+          newClient.updateTimeShift(shift);
+          newClient.state |= STATE_CONNECTED;
+          newClient.ack = seq;
+          newClient._onTerminate = (code: number) => {
+            delete this.clients[remoteId];
+            newClient.socket = null;
+            // In case the server has initiated a close
+            if (this.state & STATE_CLOSING) {
+              if (Object.keys(this.clients).length === 0) {
+                this.state = STATE_NONE;
+                this.socket.close();
+                this.socket = null;
+                if (this.onClose) this.onClose(CODE_NORMAL);
+              }
             }
           }
+          newClient.tx.add(MSG_CONNECT, connPayload);
+          newClient.tx.try();
+          // Try to initialize the client
+          this.onConnection(newClient, payload, connPayload);
         }
-        newClient.tx.add(MSG_CONNECT, connPayload);
-        newClient.tx.try();
-        // Try to initialize the client
-        this.onConnection(newClient, payload, connPayload);
+      } else {
+        // process as a client
+        this.updateTimeShift(shift);
+        this._processData(data, rInfo);
       }
-    } else {
-      // process as a client
-      this.updateTimeShift(shift);
-      this._processData(data, rInfo);
+    } catch (err) {
+      console.error(err);
+      // Ignore any error while processing request
+      return;
     }
   }
 
@@ -345,13 +361,14 @@ export class UDPSocket {
   }
 
   private _send(type: number, port: number, ip: string, buf: Uint8Array, offset: number = 0, length: number = buf.length, chunk: number = 0) {
-    buf[0] = type;
-    buf[1] = this.version;
-    buf[2] = this.seq;
-    buf[3] = this.ack;
-    buf[4] = chunk;
+    buf[0] = SOF;
+    buf[1] = type;
+    buf[2] = this.version;
+    buf[3] = this.seq;
+    buf[4] = this.ack;
+    buf[5] = chunk;
 
-    dateToBin(Date.now(), buf, 5);
+    dateToBin(Date.now(), buf, 6);
 
     if (process.env.NODE_ENV === 'development') {
       let typeStr = '';
