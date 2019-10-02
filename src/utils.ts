@@ -77,7 +77,7 @@ export class TxQueue {
         chunks,
         offset,
         chunks === 0 ? (payload.length - offset) : (CHUNK_SIZE + HEADER.length),
-        data === null,
+        false,
       ]);
       offset += CHUNK_SIZE;
     } while (chunks > 0);
