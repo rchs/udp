@@ -25,4 +25,10 @@ if (!SERVER || !SERVER_PORT) {
   client.onClose = () => {
     console.log('Closed');
   }
+
+  process.on('SIGINT', () => {
+    client.close();
+  });
 }
+
+
