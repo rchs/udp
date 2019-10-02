@@ -1,5 +1,6 @@
 import { Socket, RemoteInfo } from 'dgram';
 import { RxBuffer, TxQueue, parsePayload, createPayload } from './utils';
+import { dateToBin, binToDate } from './dateToBin';
 
 /**
  * Packet format
@@ -23,11 +24,12 @@ const VERSION = 1;
 const MAX_TRIES = 3;
 
 const STATE_NONE = 0;
-const STATE_LISTENING = 1;
-const STATE_CONNECTING = 2;
-const STATE_CONNECTED = 3;
-const STATE_CLOSING = 4;
-type State = 0 | 1 | 2 | 3 | 4;
+const STATE_LISTENING = 0x80;
+const STATE_CLIENT = 0x40;
+const STATE_CONNECTING = 0x01;
+const STATE_CONNECTED = 0x02;
+const STATE_CLOSING = 0x04;
+type State = number;
 
 const MSG_BCAST = 0x00;
 const MSG_DATA = 0x80;
@@ -71,7 +73,7 @@ export class UDPSocket {
   private ack: number;
   private rx: RxBuffer;
   private tx: TxQueue;
-  private timeShift: number;
+  private timeShifts: number[] = new Array(9);
   private _onTerminate: (code: number) => void;
 
   constructor(socket: Socket, port?: number) {
@@ -115,9 +117,8 @@ export class UDPSocket {
       this.socket.close();
       this.socket = null;
     }
-    this.state = STATE_CONNECTING;
     this.remoteAddress = to;
-    this.tx.add(MSG_CONNECT, [Date.now(), token]);
+    this.tx.add(MSG_CONNECT, token);
     this.tx.try();
   }
 
@@ -125,8 +126,17 @@ export class UDPSocket {
     this._send(MSG_BCAST, this.port, address, createPayload(message));
   }
 
+  updateTimeShift(shift: number) {
+    if (this.timeShifts[0] === undefined) {
+      this.timeShifts.fill(shift);
+    } else {
+      this.timeShifts.shift();
+      this.timeShifts.push(shift);
+    }
+  }
+
   getTimeShift(): number {
-    return this.timeShift;
+    return this.timeShifts[5];
   }
 
   remote(): AddressInfo {
@@ -148,8 +158,21 @@ export class UDPSocket {
   }
 
   private _handleMessage = (data: Uint8Array, rInfo: RemoteInfo) => {
+    if (process.env.NODE_ENV === 'development') {
+      let typeStr = '';
+      switch (data[0]) {
+        case MSG_BCAST: typeStr = 'BROADCAST'; break;
+        case MSG_CONNECT: typeStr = 'CONNECT'; break;
+        case MSG_MESSAGE: typeStr = 'MESSAGE'; break;
+        case MSG_CLOSE: typeStr = 'CLOSE'; break;
+      }
+      console.log(`Rx ${rInfo.address}:${rInfo.port}: type=${data[0]}:${typeStr}, version=${data[1]}, seq=${data[2]}, ack=${data[3]}, chunk=${data[4]}, Len=${data.length}`)
+    }
+
     const type = data[0];
     const version = data[1];
+    const seq = data[2];
+    const shift = Date.now() - binToDate(data, 5);
 
     // Handle broadcast separately
     if (type === MSG_BCAST) {
@@ -158,12 +181,11 @@ export class UDPSocket {
       return;
     }
 
-    if (this.state !== STATE_LISTENING) {
-      this._processData(data, rInfo);
-    } else {
+    if (this.state & STATE_LISTENING) {
       const remoteId = `${rInfo.address}:${rInfo.port}`;
       const client = this.clients[remoteId];
       if (client) {
+        client.updateTimeShift(shift);
         client._processData(data, rInfo);
       } else if (type === MSG_CONNECT) {
         const payload = parsePayload(data);
@@ -171,16 +193,19 @@ export class UDPSocket {
         const newClient = new UDPSocket(this.socket, null);
         this.clients[remoteId] = newClient;
         newClient._init(rInfo, version);
-        newClient.seq = 1;
+        newClient.updateTimeShift(shift);
+        newClient.state |= STATE_CONNECTED;
+        newClient.ack = seq;
         newClient._onTerminate = (code: number) => {
           delete this.clients[remoteId];
           newClient.socket = null;
-          if (this.state === STATE_CLOSING) {
+          // In case the server has initiated a close
+          if (this.state & STATE_CLOSING) {
             if (Object.keys(this.clients).length === 0) {
               this.state = STATE_NONE;
               this.socket.close();
               this.socket = null;
-              this.onClose(CODE_NORMAL);
+              if (this.onClose) this.onClose(CODE_NORMAL);
             }
           }
         }
@@ -189,23 +214,26 @@ export class UDPSocket {
         // Try to initialize the client
         this.onConnection(newClient, payload, connPayload);
       }
+    } else {
+      // process as a client
+      this.updateTimeShift(shift);
+      this._processData(data, rInfo);
     }
   }
 
   private _processData(data: Uint8Array, rInfo: RemoteInfo) {
     const type = data[0];
     const version = data[1];
-    const ack = data[2];
-    const seq = data[3];
+    const seq = data[2];
+    const ack = data[3];
 
     if (ack === this.seq) {
       // We got ourselves an acknowledgement for the sent data
       // Clear pending tx
-      this.seq = incr(this.seq);
       const type = this.tx.pop();
 
       // We got acknowledgement for our close, it's time for termination
-      if (type === MSG_CLOSE) {
+      if (type === MSG_CLOSE || ((this.state & STATE_CLOSING) && type === null)) {
         this._terminate(CODE_NORMAL);
       }
     }
@@ -215,14 +243,18 @@ export class UDPSocket {
       this.ack = seq;
       const payload = this.rx.append(data);
       if (payload !== undefined) {
-        if (type === MSG_DATA) {
+        if (type === MSG_MESSAGE) {
           this.onMessage(payload);
-          this.tx.activate(MSG_DATA);
+          this.tx.activate(MSG_MESSAGE);
         } else if (type === MSG_CONNECT) {
-          this.onConnect(payload);
-          this.tx.activate(MSG_DATA);
+          const connPayload = payload;
+          this.state |= STATE_CONNECTED;
+          this.onConnect(connPayload);
+          this.tx.activate(MSG_MESSAGE);
         } else if (type === MSG_CLOSE) {
-          this.close(payload);
+          this.state |= STATE_CLOSING;
+          // Acknowledge the close request
+          this.tx.activate(MSG_CLOSE);
         }
       }
     }
@@ -240,7 +272,7 @@ export class UDPSocket {
   }
 
   private _init(rinfo: AddressInfo, version: number) {
-    this.state = STATE_CONNECTED;
+    this.state = STATE_CLIENT;
     this.remoteAddress = rinfo;
     this.seq = 0;
     this.ack = 0;
@@ -249,7 +281,7 @@ export class UDPSocket {
 
     this.tx = new TxQueue(() => {
       this.tx.tries += 1;
-      if (this.tx.tries >= MAX_TRIES) {
+      if (this.tx.tries > MAX_TRIES) {
         return this._terminate(CODE_NO_RESPONSE);
       }
 
@@ -266,12 +298,12 @@ export class UDPSocket {
   }
 
   close(reason: number = 0) {
-    if (this.state === STATE_CLOSING) {
+    if (this.state & STATE_CLOSING) {
       return;
     }
 
-    if (this.state === STATE_LISTENING) {
-      this.state = STATE_CLOSING;
+    this.state |= STATE_CLOSING;
+    if (this.state & STATE_LISTENING) {
       const clients = Object.values(this.clients);
       if (clients.length === 0) {
         this.socket.close();
@@ -281,7 +313,6 @@ export class UDPSocket {
         clients.forEach(client => client.close());
       }
     } else {
-      this.state = STATE_CLOSING;
       this.tx.add(MSG_CLOSE, reason);
       this.tx.try();
     }
@@ -299,11 +330,11 @@ export class UDPSocket {
   }
 
   send(data: any) {
-    if (this.state !== STATE_CONNECTED) {
-      console.warn('Socket is not connected. Data will not be sent');
-    } else {
+    if (this.state & STATE_CONNECTED) {
       this.tx.add(MSG_MESSAGE, data);
       this.tx.try();
+    } else {
+      console.warn('Socket is not connected. Data will not be sent');
     }
   }
 
@@ -313,6 +344,19 @@ export class UDPSocket {
     buf[2] = this.seq;
     buf[3] = this.ack;
     buf[4] = chunk;
+
+    dateToBin(Date.now(), buf, 5);
+
+    if (process.env.NODE_ENV === 'development') {
+      let typeStr = '';
+      switch (type) {
+        case MSG_BCAST: typeStr='BROADCAST'; break;
+        case MSG_CONNECT: typeStr='CONNECT'; break;
+        case MSG_MESSAGE: typeStr='MESSAGE'; break;
+        case MSG_CLOSE: typeStr='CLOSE'; break;
+      }
+      console.log(`Tx: ${ip}:${port} type=${typeStr}:${type}, version=${buf[1]}, seq=${buf[2]}, ack=${buf[3]}, chunk=${buf[4]}, len=${length}`);
+    }
 
     this.socket.send(buf, offset, length, port, ip, this._handleSend);
   }

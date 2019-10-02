@@ -1,13 +1,13 @@
 import { strToUint8, uint8ToStr } from './strToUint8';
 
 // Maximum chunksize (limited by android devices)
-const CHUNK_SIZE = 960;
-
+const CHUNK_SIZE = 980;
+const HEADER_SPACE = ' '.repeat(9); // Total Header would be SPACE + 4 bytes
 export function createPayload(data: any) {
-  return strToUint8(JSON.stringify([" ", data]));
+  return strToUint8(JSON.stringify([HEADER_SPACE, data]));
 }
-const HEADER = strToUint8('[" ",');
-const BLANK = strToUint8(JSON.stringify([' ', null]));
+const HEADER = strToUint8(`["${HEADER_SPACE}",`);
+const BLANK = strToUint8(JSON.stringify([HEADER_SPACE, null]));
 
 export function parsePayload(payload: Uint8Array) {
   payload.set(HEADER);
