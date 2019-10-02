@@ -112,7 +112,7 @@ export class TxQueue {
     if (this.handle) {
       clearTimeout(this.handle);
       this.handle = null;
-      this.queue = null;
     }
+    this.queue.length = 0;
   }
 }
