@@ -91,12 +91,12 @@ export class TxQueue {
 
   try() {
     if (this.handle || this.queue.length === 0) return;
-
-    // Setup a timer for retry
-    this.handle = setTimeout(this.sender, 300);
-
     // Try to send
     this.sender();
+  }
+
+  setupRetry() {
+    this.handle = setTimeout(this.sender, 300);
   }
 
   abort() {

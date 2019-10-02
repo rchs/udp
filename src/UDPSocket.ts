@@ -246,7 +246,14 @@ export class UDPSocket {
       }
 
       const [type, buffer, chunk, offset, length, isEmpty] = this.tx.peek();
-      this._send(type, this.remoteAddress.port, this.remoteAddress.address, buffer, offset, length, chunk, isEmpty);
+      if (!isEmpty) {
+        this.tx.setupRetry();
+        if (this.tx.tries === 1) {
+          this.seq = incr(this.seq);
+        }
+      }
+
+      this._send(type, this.remoteAddress.port, this.remoteAddress.address, buffer, offset, length, chunk);
     });
   }
 
@@ -292,10 +299,10 @@ export class UDPSocket {
     }
   }
 
-  private _send(type: number, port: number, ip: string, buf: Uint8Array, offset: number = 0, length: number = buf.length, chunk: number = 0, isEmpty: boolean = false) {
+  private _send(type: number, port: number, ip: string, buf: Uint8Array, offset: number = 0, length: number = buf.length, chunk: number = 0) {
     buf[0] = type;
     buf[1] = this.version;
-    buf[2] = isEmpty ? this.seq : incr(this.seq);
+    buf[2] = this.seq;
     buf[3] = this.ack;
     buf[4] = chunk;
 
