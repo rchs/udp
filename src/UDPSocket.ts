@@ -312,9 +312,15 @@ export class UDPSocket {
       } else {
         clients.forEach(client => client.close());
       }
-    } else {
+    } else if (this.state & STATE_CLIENT) {
       this.tx.add(MSG_CLOSE, reason);
       this.tx.try();
+    } else {
+      if (this.socket) {
+        this.socket.close();
+        this.socket = null;
+        if (this.onClose) this.onClose(reason);
+      }
     }
   }
 
