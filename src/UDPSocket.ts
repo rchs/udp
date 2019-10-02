@@ -166,15 +166,16 @@ export class UDPSocket {
   }
 
   private _handleMessage = (data: Uint8Array, rInfo: RemoteInfo) => {
-    if (process.env.NODE_ENV === 'development') {
+    // @ts-ignore
+    if (process.env.NODE_ENV === 'development' || __DEV__) {
       let typeStr = '';
-      switch (data[0]) {
+      switch (data[1]) {
         case MSG_BCAST: typeStr = 'BROADCAST'; break;
         case MSG_CONNECT: typeStr = 'CONNECT'; break;
         case MSG_MESSAGE: typeStr = 'MESSAGE'; break;
         case MSG_CLOSE: typeStr = 'CLOSE'; break;
       }
-      console.log(`Rx ${rInfo.address}:${rInfo.port}: type=${data[0]}:${typeStr}, version=${data[1]}, seq=${data[2]}, ack=${data[3]}, chunk=${data[4]}, Len=${data.length}`)
+      console.log(`Rx ${rInfo.address}:${rInfo.port}: type=${data[1]}:${typeStr}, version=${data[2]}, seq=${data[3]}, ack=${data[4]}, chunk=${data[5]}, Len=${data.length}`)
     }
 
     if (!validate(data)) return;
@@ -238,10 +239,11 @@ export class UDPSocket {
   }
 
   private _processData(data: Uint8Array, rInfo: RemoteInfo) {
-    const type = data[0];
-    const version = data[1];
-    const seq = data[2];
-    const ack = data[3];
+    const type = data[1];
+    const version = data[2];
+    const seq = data[3];
+    const ack = data[4];
+    const chunk = data[5];
 
     if (ack === this.seq) {
       // We got ourselves an acknowledgement for the sent data
@@ -257,7 +259,7 @@ export class UDPSocket {
     if (seq === incr(this.ack)) {
       // We got some data to process
       this.ack = seq;
-      const payload = this.rx.append(data);
+      const payload = this.rx.append(chunk, data);
       if (payload !== undefined) {
         if (type === MSG_MESSAGE) {
           this.onMessage(payload);
@@ -370,7 +372,8 @@ export class UDPSocket {
 
     dateToBin(Date.now(), buf, 6);
 
-    if (process.env.NODE_ENV === 'development') {
+    // @ts-ignore
+    if (process.env.NODE_ENV === 'development' || __DEV__) {
       let typeStr = '';
       switch (type) {
         case MSG_BCAST: typeStr='BROADCAST'; break;
@@ -378,7 +381,7 @@ export class UDPSocket {
         case MSG_MESSAGE: typeStr='MESSAGE'; break;
         case MSG_CLOSE: typeStr='CLOSE'; break;
       }
-      console.log(`Tx: ${ip}:${port} type=${typeStr}:${type}, version=${buf[1]}, seq=${buf[2]}, ack=${buf[3]}, chunk=${buf[4]}, len=${length}`);
+      console.log(`Tx: ${ip}:${port} type=${typeStr}:${type}, version=${buf[2]}, seq=${buf[3]}, ack=${buf[4]}, chunk=${buf[5]}, len=${length}`);
     }
 
     this.socket.send(buf, offset, length, port, ip, this._handleSend);
