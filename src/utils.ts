@@ -17,8 +17,7 @@ export function parsePayload(payload: Uint8Array) {
 export class RxBuffer {
   private buffer: Uint8Array;
 
-  append(buffer: Uint8Array): any {
-    const chunk = buffer[4];
+  append(chunk: number, buffer: Uint8Array): any {
     let buf = buffer;
     if (this.buffer) {
       buf = new Uint8Array(this.buffer.length + buffer.length - HEADER.length);
