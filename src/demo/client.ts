@@ -3,11 +3,12 @@ import{ UDPSocket } from '../';
 
 const SERVER = process.argv[2];
 const SERVER_PORT = parseInt(process.argv[3]);
+const CLIENT_PORT = parseInt(process.argv[4]) || 0;
 
 if (!SERVER || !SERVER_PORT) {
   console.log('Provider server address and port as cli arguments');
 } else {
-  const client = new UDPSocket(dgram.createSocket('udp4'));
+  const client = new UDPSocket(dgram.createSocket('udp4'), CLIENT_PORT);
   client.onReady = () => {
     console.log(`Client is ready at ${client.address().port} connecting to udp://${SERVER}:${SERVER_PORT}`);
     client.connect({ address: SERVER, port: SERVER_PORT }, 'Demo Client');

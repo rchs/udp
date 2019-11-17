@@ -15,13 +15,15 @@ import { dateToBin, binToDate } from './dateToBin';
  * Byte 4: Chunk Number
  */
 
-type AddressInfo = {
+export type AddressInfo = {
   address: string,
   port: number,
 }
 
+let totalRetries = 0;
+
 const VERSION = 1;
-const MAX_TRIES = 3;
+const MAX_TRIES = 5;
 
 const STATE_NONE = 0;
 const STATE_LISTENING = 0x80;
@@ -196,37 +198,40 @@ export class UDPSocket {
       if (this.state & STATE_LISTENING) {
         const remoteId = `${rInfo.address}:${rInfo.port}`;
         const client = this.clients[remoteId];
-        if (client) {
-          client.updateTimeShift(shift);
-          client._processData(data, rInfo);
-        } else if (type === MSG_CONNECT) {
-          const payload = parsePayload(data);
-          const connPayload = this.onInit ? this.onInit(payload) : null;
-          const newClient = new UDPSocket(this.socket, null);
-          this.clients[remoteId] = newClient;
-          newClient._init(rInfo, version);
-          newClient.updateTimeShift(shift);
-          newClient.state |= STATE_CONNECTED;
-          newClient.ack = seq;
-          newClient._onTerminate = (code: number) => {
-            delete this.clients[remoteId];
-            newClient.socket = null;
-            // In case the server has initiated a close
-            if (this.state & STATE_CLOSING) {
-              if (Object.keys(this.clients).length === 0) {
-                this.state = STATE_NONE;
-                this.socket.close();
-                this.socket = null;
-                if (this.onClose) this.onClose(CODE_NORMAL);
+        if (type === MSG_CONNECT) {
+          if (client && client.state & STATE_CONNECTED) {
+            client._terminate(CODE_NO_RESPONSE);
+          } else {
+            const payload = parsePayload(data);
+            const connPayload = this.onInit ? this.onInit(payload) : null;
+            const newClient = new UDPSocket(this.socket, null);
+            this.clients[remoteId] = newClient;
+            newClient._init(rInfo, version);
+            newClient.updateTimeShift(shift);
+            newClient.ack = seq;
+            newClient._onTerminate = (code: number) => {
+              delete this.clients[remoteId];
+              newClient.socket = null;
+              // In case the server has initiated a close
+              if (this.state & STATE_CLOSING) {
+                if (Object.keys(this.clients).length === 0) {
+                  this.state = STATE_NONE;
+                  this.socket.close();
+                  this.socket = null;
+                  if (this.onClose) this.onClose(CODE_NORMAL);
+                }
               }
             }
+            newClient.tx.add(MSG_CONNECT, connPayload);
+            newClient.tx.try();
+            // Try to initialize the client
+            this.onConnection(newClient, payload, connPayload);
           }
-          newClient.tx.add(MSG_CONNECT, connPayload);
-          newClient.tx.try();
-          // Try to initialize the client
-          this.onConnection(newClient, payload, connPayload);
+        } else if (client) {
+          client.updateTimeShift(shift);
+          client._processData(data, rInfo);
         }
-      } else {
+      } else if (this.state & STATE_CLIENT) {
         // process as a client
         this.updateTimeShift(shift);
         this._processData(data, rInfo);
@@ -250,8 +255,10 @@ export class UDPSocket {
       // Clear pending tx
       const type = this.tx.pop();
 
-      // We got acknowledgement for our close, it's time for termination
-      if (type === MSG_CLOSE || ((this.state & STATE_CLOSING) && type === null)) {
+      if (type === MSG_CONNECT) {
+        this.state |= STATE_CONNECTED;
+      } else if (type === MSG_CLOSE || ((this.state & STATE_CLOSING) && type === null)) {
+        // We got acknowledgement for our close, it's time for termination
         this._terminate(CODE_NORMAL);
       }
     }
@@ -266,7 +273,6 @@ export class UDPSocket {
           this.tx.activate(MSG_MESSAGE);
         } else if (type === MSG_CONNECT) {
           const connPayload = payload;
-          this.state |= STATE_CONNECTED;
           this.onConnect(connPayload);
           this.tx.activate(MSG_MESSAGE);
         } else if (type === MSG_CLOSE) {
@@ -290,7 +296,7 @@ export class UDPSocket {
   }
 
   private _init(rinfo: AddressInfo, version: number) {
-    this.state = STATE_CLIENT;
+    this.state = STATE_CLIENT | STATE_CONNECTING;
     this.remoteAddress = rinfo;
     this.seq = 0;
     this.ack = 0;
@@ -301,6 +307,12 @@ export class UDPSocket {
       this.tx.tries += 1;
       if (this.tx.tries > MAX_TRIES) {
         return this._terminate(CODE_NO_RESPONSE);
+      } else if (this.tx.tries > 1) {
+        totalRetries += 1;
+        // @ts-ignore
+        if (__DEV__ || process.env.NODE_ENV === 'development') {
+          console.log('UDP::Total retries so far due to loss:', totalRetries);
+        }
       }
 
       const [type, buffer, chunk, offset, length, isEmpty] = this.tx.peek();
@@ -354,11 +366,11 @@ export class UDPSocket {
   }
 
   send(data: any) {
-    if (this.state & STATE_CONNECTED) {
+    if (this.state & STATE_CONNECTED || this.state & STATE_CONNECTING) {
       this.tx.add(MSG_MESSAGE, data);
       this.tx.try();
     } else {
-      console.warn('Socket is not connected. Data will not be sent');
+      console.warn('Socket is not connected. Data will not be sent', this.state);
     }
   }
 

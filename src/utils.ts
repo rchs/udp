@@ -1,4 +1,5 @@
 import { strToUint8, uint8ToStr } from './strToUint8';
+const RETRY_INTERVAL = 500;
 
 // Maximum chunksize (limited by android devices)
 const CHUNK_SIZE = 980;
@@ -104,7 +105,7 @@ export class TxQueue {
   }
 
   setupRetry() {
-    this.handle = setTimeout(this.sender, 300);
+    this.handle = setTimeout(this.sender, RETRY_INTERVAL + Math.random() * 50);
   }
 
   abort() {
