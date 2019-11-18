@@ -263,6 +263,19 @@ export class UDPSocket {
       }
     }
 
+    if (seq === this.ack) {
+      // Looks like we got a retransmission for the same data
+      // which means the remote end didn't get our ack and is
+      // expecting an ack
+      if (type === MSG_MESSAGE) {
+        this.tx.activate(MSG_MESSAGE);
+      } else if (type === MSG_CONNECT) {
+        this.tx.activate(MSG_MESSAGE);
+      } else if (type === MSG_CLOSE) {
+        this.tx.activate(MSG_CLOSE);
+      }
+    }
+
     if (seq === incr(this.ack)) {
       // We got some data to process
       this.ack = seq;
