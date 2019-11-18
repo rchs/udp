@@ -177,7 +177,7 @@ export class UDPSocket {
         case MSG_MESSAGE: typeStr = 'MESSAGE'; break;
         case MSG_CLOSE: typeStr = 'CLOSE'; break;
       }
-      console.log(`Rx ${rInfo.address}:${rInfo.port}: type=${data[1]}:${typeStr}, version=${data[2]}, seq=${data[3]}, ack=${data[4]}, chunk=${data[5]}, Len=${data.length}`)
+      console.log(`Rx: ${this.port} < ${rInfo.address}:${rInfo.port} type=${data[1]}:${typeStr}, version=${data[2]}, seq=${data[3]}, ack=${data[4]}, chunk=${data[5]}, Len=${data.length}`)
     }
 
     if (!validate(data)) return;
@@ -366,6 +366,9 @@ export class UDPSocket {
   }
 
   send(data: any) {
+    if (process.env.NODE_ENV === 'development' || __DEV__) {
+      console.log(`Pre[Tx]: ${this.port} > ${this.remoteAddress.address}:${this.remoteAddress.port} payload size=${JSON.stringify(data)}`);
+    }
     if (this.state & STATE_CONNECTED || this.state & STATE_CONNECTING) {
       this.tx.add(MSG_MESSAGE, data);
       this.tx.try();
@@ -393,7 +396,7 @@ export class UDPSocket {
         case MSG_MESSAGE: typeStr='MESSAGE'; break;
         case MSG_CLOSE: typeStr='CLOSE'; break;
       }
-      console.log(`Tx: ${ip}:${port} type=${typeStr}:${type}, version=${buf[2]}, seq=${buf[3]}, ack=${buf[4]}, chunk=${buf[5]}, len=${length}`);
+      console.log(`Tx: ${this.port} > ${ip}:${port} type=${typeStr}:${type}, version=${buf[2]}, seq=${buf[3]}, ack=${buf[4]}, chunk=${buf[5]}, len=${length}`);
     }
 
     this.socket.send(buf, offset, length, port, ip, this._handleSend);
