@@ -366,6 +366,7 @@ export class UDPSocket {
   }
 
   send(data: any) {
+    // @ts-ignore
     if (process.env.NODE_ENV === 'development' || __DEV__) {
       console.log(`Pre[Tx]: ${this.port} > ${this.remoteAddress.address}:${this.remoteAddress.port} payload size=${JSON.stringify(data)}`);
     }
